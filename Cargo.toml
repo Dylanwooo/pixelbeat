@@ -1,0 +1,45 @@
+[package]
+name = "pixelbeat"
+version = "0.1.0"
+edition = "2021"
+description = "A pixel-art terminal music player daemon with status bar integration"
+license = "MIT"
+repository = "https://github.com/dylanwoo/pixelbeat"
+keywords = ["music", "terminal", "tui", "pixel-art", "statusline"]
+categories = ["command-line-utilities", "multimedia::audio"]
+
+[[bin]]
+name = "px"
+path = "src/main.rs"
+
+[dependencies]
+# Audio
+rodio = { version = "0.19", features = ["symphonia-all"] }
+
+# FFT for spectrum analysis
+rustfft = "6.2"
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# HTTP for streaming
+reqwest = { version = "0.12", features = ["blocking"] }
+
+# Utilities
+dirs = "6"
+anyhow = "1"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
