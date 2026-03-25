@@ -197,6 +197,8 @@ px quit
 
 ### Claude Code
 
+![pixelbeat 在 Claude Code 中的效果](assets/demo.png)
+
 运行安装向导：
 
 ```bash

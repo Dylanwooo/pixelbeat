@@ -199,6 +199,8 @@ px quit
 
 ### Claude Code
 
+![pixelbeat in Claude Code](assets/demo.png)
+
 Run the setup wizard:
 
 ```bash
