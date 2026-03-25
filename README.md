@@ -5,17 +5,11 @@
 [English](README.md) | [中文](README_CN.md)
 
 [![Rust](https://img.shields.io/badge/Rust-2021_Edition-E3893E?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![CI](https://github.com/Dylanwooo/pixelbeat/actions/workflows/ci.yml/badge.svg)](https://github.com/Dylanwooo/pixelbeat/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-E3893E.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-supported-E3893E?logo=apple&logoColor=white)]()
 
-![pixelbeat in Claude Code](assets/demo.png)
-
-<details>
-<summary>See it in action (GIF)</summary>
-
 ![pixelbeat demo](assets/demo.gif)
-
-</details>
 
 ```
 ┌ PIXELBEAT ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ──┐
