@@ -349,4 +349,4 @@ If you find a bug or have a feature idea, please open an issue first so we can d
 
 MIT -- see [LICENSE](LICENSE) for details.
 
-Copyright (c) 2025 Dylan Woo
+Copyright (c) 2026 Dylan Woo

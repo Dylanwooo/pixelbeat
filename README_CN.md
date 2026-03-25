@@ -347,4 +347,4 @@ shuffle = false
 
 MIT -- 详见 [LICENSE](LICENSE)。
 
-Copyright (c) 2025 Dylan Woo
+Copyright (c) 2026 Dylan Woo
