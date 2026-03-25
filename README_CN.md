@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-E3893E.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-supported-E3893E?logo=apple&logoColor=white)]()
 
-![pixelbeat 在 Claude Code 中的效果](assets/screenshot.png)
+![pixelbeat 在 Claude Code 中的效果](assets/demo.png)
 
 ```
 ┌ PIXELBEAT ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ──┐
