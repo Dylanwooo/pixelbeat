@@ -5,10 +5,10 @@ mod tui;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use std::fs;
-use std::io::Write;
+use std::path::PathBuf;
+use std::process::{Command as ProcessCommand, Stdio};
+use std::sync::{Arc, Mutex};
 
 #[derive(Parser)]
 #[command(
@@ -137,17 +137,33 @@ fn main() -> Result<()> {
 
             player.cookies_browser = cfg.youtube_cookies_browser.clone();
 
+            // Phase 4: Check optional dependencies at startup
+            if !daemon::youtube::is_mpv_available() {
+                eprintln!(
+                    "pixelbeat: mpv not found — YouTube streaming unavailable (install: {})",
+                    install_hint("mpv")
+                );
+            }
+            if !daemon::youtube::is_ytdlp_available() {
+                eprintln!("pixelbeat: yt-dlp not found — YouTube playlist resolution unavailable (install: {})", install_hint("yt-dlp"));
+            }
+
             let mut autoplay_radio = None;
+            let mut has_source = false;
 
             if let Some(ref path) = play {
                 player.load_path(path)?;
                 player.play()?;
+                has_source = true;
             } else if let Some(ref source) = cfg.source {
+                has_source = true;
                 match source.as_str() {
                     "local" => {
                         if let Some(dir) = cfg.music_dir_expanded().filter(|p| p.exists()) {
                             player.load_path(&dir)?;
                             player.play()?;
+                        } else {
+                            has_source = false;
                         }
                     }
                     "youtube" => {
@@ -156,6 +172,7 @@ fn main() -> Result<()> {
                             autoplay_radio = Some(format!("youtube:{}", yt_url));
                         } else {
                             eprintln!("pixelbeat: source=youtube but no youtube_url configured");
+                            has_source = false;
                         }
                     }
                     station => {
@@ -167,13 +184,20 @@ fn main() -> Result<()> {
                 if let Some(dir) = cfg.music_dir_expanded().filter(|p| p.exists()) {
                     player.load_path(&dir)?;
                     player.play()?;
+                    has_source = true;
                 }
+            }
+
+            // Phase 3b: Show welcome message when no music source is configured
+            if !has_source && autoplay_radio.is_none() {
+                print_welcome_message();
             }
 
             let player = Arc::new(Mutex::new(player));
             daemon::ipc::start_server(player, autoplay_radio)?;
         }
         Commands::Play { path } => {
+            ensure_daemon()?;
             let path_str = path.map(|p| {
                 p.canonicalize()
                     .unwrap_or(p.clone())
@@ -182,13 +206,32 @@ fn main() -> Result<()> {
             });
             cli::commands::handle_play(path_str)?;
         }
-        Commands::Pause => cli::commands::handle_pause()?,
-        Commands::Toggle => cli::commands::handle_toggle()?,
-        Commands::Stop => cli::commands::handle_stop()?,
-        Commands::Next => cli::commands::handle_next()?,
-        Commands::Prev => cli::commands::handle_prev()?,
-        Commands::Vol { level } => cli::commands::handle_volume(level)?,
+        Commands::Pause => {
+            ensure_daemon()?;
+            cli::commands::handle_pause()?;
+        }
+        Commands::Toggle => {
+            ensure_daemon()?;
+            cli::commands::handle_toggle()?;
+        }
+        Commands::Stop => {
+            ensure_daemon()?;
+            cli::commands::handle_stop()?;
+        }
+        Commands::Next => {
+            ensure_daemon()?;
+            cli::commands::handle_next()?;
+        }
+        Commands::Prev => {
+            ensure_daemon()?;
+            cli::commands::handle_prev()?;
+        }
+        Commands::Vol { level } => {
+            ensure_daemon()?;
+            cli::commands::handle_volume(level)?;
+        }
         Commands::Shuffle => {
+            ensure_daemon()?;
             // Toggle: get current state first
             if let Ok(resp) = daemon::ipc::send_command(&daemon::ipc::Command::Status) {
                 if let Some(state) = resp.state {
@@ -197,6 +240,7 @@ fn main() -> Result<()> {
             }
         }
         Commands::Repeat => {
+            ensure_daemon()?;
             // Toggle: get current state first
             if let Ok(resp) = daemon::ipc::send_command(&daemon::ipc::Command::Status) {
                 if let Some(state) = resp.state {
@@ -204,24 +248,101 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Status { format } => cli::commands::handle_status(format)?,
-        Commands::Radio { station } => {
-            match station {
-                Some(name) => cli::commands::handle_radio(&name)?,
-                None => {
-                    let stations = daemon::radio::list_stations();
-                    eprintln!("Available stations: {}", stations.join(", "));
-                    eprintln!("Usage: px radio chillhop");
-                }
-            }
+        Commands::Status { format } => {
+            ensure_daemon()?;
+            cli::commands::handle_status(format)?;
         }
-        Commands::Yt { url } => cli::commands::handle_youtube(&url)?,
-        Commands::Tui => tui::app::run_tui()?,
-        Commands::Quit => cli::commands::handle_quit()?,
+        Commands::Radio { station } => match station {
+            Some(name) => {
+                ensure_daemon()?;
+                cli::commands::handle_radio(&name)?;
+            }
+            None => {
+                let stations = daemon::radio::list_stations();
+                eprintln!("Available stations: {}", stations.join(", "));
+                eprintln!("Usage: px radio chillhop");
+            }
+        },
+        Commands::Yt { url } => {
+            ensure_daemon()?;
+            cli::commands::handle_youtube(&url)?;
+        }
+        Commands::Tui => {
+            ensure_daemon()?;
+            tui::app::run_tui()?;
+        }
+        Commands::Quit => {
+            ensure_daemon()?;
+            cli::commands::handle_quit()?;
+        }
         Commands::Setup { target } => print_setup(&target),
     }
 
     Ok(())
+}
+
+/// Return a platform-appropriate install hint for a package
+fn install_hint(pkg: &str) -> &'static str {
+    if cfg!(target_os = "macos") {
+        match pkg {
+            "mpv" => "brew install mpv",
+            "yt-dlp" => "brew install yt-dlp",
+            _ => "see project README",
+        }
+    } else {
+        match pkg {
+            "mpv" => "apt install mpv / pacman -S mpv / dnf install mpv",
+            "yt-dlp" => "pip install yt-dlp / apt install yt-dlp",
+            _ => "see project README",
+        }
+    }
+}
+
+/// Auto-start the daemon if it's not already running.
+/// Spawns `px daemon` as a detached background process and waits for the socket.
+fn ensure_daemon() -> Result<()> {
+    if daemon::ipc::is_daemon_running() {
+        return Ok(());
+    }
+
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("px"));
+    ProcessCommand::new(exe)
+        .arg("daemon")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("Failed to auto-start daemon: {}", e))?;
+
+    // Wait for socket to become available (up to 3 seconds)
+    for _ in 0..30 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if daemon::ipc::is_daemon_running() {
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!(
+        "Daemon did not start in time. Try starting it manually: px daemon\n\
+         Check that your audio device is available."
+    )
+}
+
+/// Print a welcome message when the daemon starts with no music source configured.
+fn print_welcome_message() {
+    const ORANGE: &str = "\x1b[38;2;227;137;62m";
+    const DIM: &str = "\x1b[2m";
+    const RESET: &str = "\x1b[0m";
+
+    eprintln!(
+        "\n{ORANGE}pixelbeat{RESET} daemon running {DIM}♪{RESET}\n\n\
+         {DIM}Quick start:{RESET}\n\
+         \x20 px radio lofi          {DIM}# Stream built-in lofi radio{RESET}\n\
+         \x20 px play ~/Music/       {DIM}# Play local audio files{RESET}\n\
+         \x20 px yt <URL>            {DIM}# Stream a YouTube playlist{RESET}\n\
+         \x20 px tui                 {DIM}# Open the visual player{RESET}\n\n\
+         {DIM}Config: ~/.config/pixelbeat/config.toml{RESET}\n"
+    );
 }
 
 fn print_setup(target: &str) {
@@ -265,7 +386,10 @@ Add to your {ORANGE}~/.config/starship.toml{RESET}:
             );
         }
         _ => {
-            println!("Unknown target: {}. Available: claude-code, tmux, starship", target);
+            println!(
+                "Unknown target: {}. Available: claude-code, tmux, starship",
+                target
+            );
         }
     }
 }
@@ -347,10 +471,12 @@ exit 0
 
         // Make executable
         #[cfg(unix)]
-        {{
-            use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(&statusline_path, fs::Permissions::from_mode(0o755));
-        }}
+        {
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&statusline_path, fs::Permissions::from_mode(0o755));
+            }
+        }
 
         println!("  {orange}✓{reset} Created statusline.sh with pixelbeat integration");
     }

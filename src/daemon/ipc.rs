@@ -94,11 +94,14 @@ fn handle_client(stream: UnixStream, player: &Arc<Mutex<Player>>) -> Result<bool
             }
         };
 
-        // Handle radio separately — download in background, play on main
+        // Handle radio separately — blocking download + play, return result to client
         if let Command::Radio { ref station } = cmd {
             if crate::daemon::radio::find_station(station).is_none() {
                 let stations = crate::daemon::radio::list_stations().join(", ");
-                let resp = Response::err(&format!("Unknown station '{}'. Available: {}", station, stations));
+                let resp = Response::err(&format!(
+                    "Unknown station '{}'. Available: {}",
+                    station, stations
+                ));
                 writeln!(writer, "{}", serde_json::to_string(&resp)?)?;
                 continue;
             }
@@ -108,14 +111,16 @@ fn handle_client(stream: UnixStream, player: &Arc<Mutex<Player>>) -> Result<bool
                 let mut state = p.state.lock().unwrap();
                 state.title = format!("loading {}...", station);
             }
-            // Respond immediately, then do blocking download + play
-            let resp = Response::ok(None);
-            writeln!(writer, "{}", serde_json::to_string(&resp)?)?;
-            // Download and play (blocking, but client already got response)
+            // Download and play (blocking), then return result to client
             let p = player.lock().unwrap();
-            if let Err(e) = p.play_radio(station) {
-                eprintln!("pixelbeat: radio error: {}", e);
-            }
+            let resp = match p.play_radio(station) {
+                Ok(_) => Response::ok(Some(p.get_state())),
+                Err(e) => {
+                    eprintln!("pixelbeat: radio error: {}", e);
+                    Response::err(&format!("Radio error: {}", e))
+                }
+            };
+            writeln!(writer, "{}", serde_json::to_string(&resp)?)?;
             continue;
         }
 
@@ -127,13 +132,16 @@ fn handle_client(stream: UnixStream, player: &Arc<Mutex<Player>>) -> Result<bool
                 let mut state = p.state.lock().unwrap();
                 state.title = "loading YouTube playlist...".to_string();
             }
-            // Respond immediately, then do blocking fetch + play
-            let resp = Response::ok(None);
-            writeln!(writer, "{}", serde_json::to_string(&resp)?)?;
+            // Fetch and play (blocking), then return result to client
             let p = player.lock().unwrap();
-            if let Err(e) = p.play_youtube(url) {
-                eprintln!("pixelbeat: youtube error: {}", e);
-            }
+            let resp = match p.play_youtube(url) {
+                Ok(_) => Response::ok(Some(p.get_state())),
+                Err(e) => {
+                    eprintln!("pixelbeat: youtube error: {}", e);
+                    Response::err(&format!("YouTube error: {}", e))
+                }
+            };
+            writeln!(writer, "{}", serde_json::to_string(&resp)?)?;
             continue;
         }
 
@@ -277,11 +285,17 @@ pub fn start_server(player: Arc<Mutex<Player>>, autoplay_radio: Option<String>) 
     Ok(())
 }
 
+/// Check if the daemon is running by attempting to connect to the socket
+pub fn is_daemon_running() -> bool {
+    let path = socket_path();
+    UnixStream::connect(&path).is_ok()
+}
+
 /// Send a command to the daemon and get a response
 pub fn send_command(cmd: &Command) -> Result<Response> {
     let path = socket_path();
-    let mut stream =
-        UnixStream::connect(&path).context("Cannot connect to pixelbeat daemon. Is it running? Start with: px daemon")?;
+    let mut stream = UnixStream::connect(&path)
+        .context("Cannot connect to pixelbeat daemon. Is it running? Start with: px daemon")?;
 
     let cmd_json = serde_json::to_string(cmd)?;
     writeln!(stream, "{}", cmd_json)?;

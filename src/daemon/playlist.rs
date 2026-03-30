@@ -30,7 +30,8 @@ impl Playlist {
             .filter(|p| {
                 p.extension()
                     .map(|ext| {
-                        SUPPORTED_EXTENSIONS.contains(&ext.to_string_lossy().to_lowercase().as_str())
+                        SUPPORTED_EXTENSIONS
+                            .contains(&ext.to_string_lossy().to_lowercase().as_str())
                     })
                     .unwrap_or(false)
             })

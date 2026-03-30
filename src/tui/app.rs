@@ -14,9 +14,9 @@ use ratatui::{
 use std::io::stdout;
 use std::time::Duration;
 
+use super::theme::Theme;
 use crate::daemon::ipc::{self, Command};
 use crate::daemon::player::PlayerState;
-use super::theme::Theme;
 
 const SPECTRUM_BARS: &[char] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -40,19 +40,31 @@ fn run_loop(
     terminal: &mut Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
     theme: &Theme,
 ) -> Result<()> {
+    let mut daemon_connected;
+
     loop {
         // Get current state from daemon
         let state = match ipc::send_command(&Command::Status) {
-            Ok(resp) => resp.state.unwrap_or_default(),
-            Err(_) => PlayerState::default(),
+            Ok(resp) => {
+                daemon_connected = true;
+                resp.state.unwrap_or_default()
+            }
+            Err(_) => {
+                daemon_connected = false;
+                PlayerState::default()
+            }
         };
 
         terminal.draw(|frame| {
-            render(frame, &state, theme);
+            if daemon_connected {
+                render(frame, &state, theme);
+            } else {
+                render_disconnected(frame, theme);
+            }
         })?;
 
         // Handle input with timeout for animation
-        if event::poll(Duration::from_millis(100))? {
+        if event::poll(Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
@@ -112,11 +124,11 @@ fn render(frame: &mut Frame, state: &PlayerState, theme: &Theme) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Length(3),  // Now Playing
-            Constraint::Length(3),  // Progress
+            Constraint::Length(3), // Header
+            Constraint::Length(3), // Now Playing
+            Constraint::Length(3), // Progress
             Constraint::Min(5),    // Spectrum
-            Constraint::Length(3),  // Controls help
+            Constraint::Length(3), // Controls help
         ])
         .split(area);
 
@@ -139,25 +151,66 @@ fn render_header(frame: &mut Frame, area: Rect, theme: &Theme) {
         .border_style(Style::default().fg(theme.dim))
         .style(Style::default().bg(theme.bg));
 
-    let header = Paragraph::new(Line::from(title))
-        .block(block)
-        .centered();
+    let header = Paragraph::new(Line::from(title)).block(block).centered();
 
     frame.render_widget(header, area);
 }
 
+fn render_disconnected(frame: &mut Frame, theme: &Theme) {
+    let area = frame.area();
+    let bg_block = Block::default().style(Style::default().bg(theme.bg));
+    frame.render_widget(bg_block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(3),
+        ])
+        .split(area);
+
+    render_header(frame, chunks[0], theme);
+
+    let msg = vec![
+        Line::from(Span::styled(
+            "Connecting to daemon...",
+            Style::default().fg(theme.text_dim),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "If this persists, start manually: px daemon",
+            Style::default().fg(theme.dim),
+        )),
+    ];
+    let para = Paragraph::new(msg)
+        .style(Style::default().bg(theme.bg))
+        .centered();
+    frame.render_widget(para, chunks[1]);
+}
+
 fn render_now_playing(frame: &mut Frame, area: Rect, state: &PlayerState, theme: &Theme) {
+    // Show error if present
+    if let Some(ref err) = state.last_error {
+        let line = vec![
+            Span::styled(" ⚠ ", Style::default().fg(ratatui::style::Color::Red)),
+            Span::styled(
+                err.as_str(),
+                Style::default().fg(ratatui::style::Color::Red),
+            ),
+        ];
+        let para = Paragraph::new(Line::from(line)).style(Style::default().bg(theme.bg));
+        frame.render_widget(para, area);
+        return;
+    }
+
     let title = if state.title.is_empty() {
         "No track loaded".to_string()
     } else {
         state.title.clone()
     };
 
-    let track_info = format!(
-        "[{}/{}]",
-        state.track_index + 1,
-        state.track_count
-    );
+    let track_info = format!("[{}/{}]", state.track_index + 1, state.track_count);
 
     let line = vec![
         Span::styled(
@@ -169,8 +222,7 @@ fn render_now_playing(frame: &mut Frame, area: Rect, state: &PlayerState, theme:
         Span::styled(track_info, Style::default().fg(theme.text_dim)),
     ];
 
-    let para = Paragraph::new(Line::from(line))
-        .style(Style::default().bg(theme.bg));
+    let para = Paragraph::new(Line::from(line)).style(Style::default().bg(theme.bg));
 
     frame.render_widget(para, area);
 }
@@ -190,20 +242,19 @@ fn render_progress(frame: &mut Frame, area: Rect, state: &PlayerState, theme: &T
     let duration = format_time(state.duration);
 
     let line = vec![
-        Span::styled(format!(" {} ", elapsed), Style::default().fg(theme.text_dim)),
         Span::styled(
-            "█".repeat(filled),
-            Style::default().fg(theme.bright),
+            format!(" {} ", elapsed),
+            Style::default().fg(theme.text_dim),
         ),
+        Span::styled("█".repeat(filled), Style::default().fg(theme.bright)),
+        Span::styled("░".repeat(empty), Style::default().fg(theme.dim)),
         Span::styled(
-            "░".repeat(empty),
-            Style::default().fg(theme.dim),
+            format!(" {} ", duration),
+            Style::default().fg(theme.text_dim),
         ),
-        Span::styled(format!(" {} ", duration), Style::default().fg(theme.text_dim)),
     ];
 
-    let para = Paragraph::new(Line::from(line))
-        .style(Style::default().bg(theme.bg));
+    let para = Paragraph::new(Line::from(line)).style(Style::default().bg(theme.bg));
 
     frame.render_widget(para, area);
 }
@@ -283,7 +334,10 @@ fn render_controls(frame: &mut Frame, area: Rect, state: &PlayerState, theme: &T
         Span::styled("[←/→]", Style::default().fg(theme.dim)),
         Span::styled(" prev/next ", Style::default().fg(theme.text_dim)),
         Span::styled("[↑/↓]", Style::default().fg(theme.dim)),
-        Span::styled(format!(" vol:{}% ", vol_pct), Style::default().fg(theme.text_dim)),
+        Span::styled(
+            format!(" vol:{}% ", vol_pct),
+            Style::default().fg(theme.text_dim),
+        ),
         Span::styled("[s]", Style::default().fg(theme.dim)),
         Span::styled(" shuffle ", shuffle_style),
         Span::styled("[r]", Style::default().fg(theme.dim)),
@@ -292,8 +346,7 @@ fn render_controls(frame: &mut Frame, area: Rect, state: &PlayerState, theme: &T
         Span::styled(" quit", Style::default().fg(theme.text_dim)),
     ];
 
-    let para = Paragraph::new(Line::from(controls))
-        .style(Style::default().bg(theme.surface));
+    let para = Paragraph::new(Line::from(controls)).style(Style::default().bg(theme.surface));
 
     frame.render_widget(para, area);
 }

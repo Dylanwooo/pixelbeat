@@ -21,23 +21,23 @@ impl Theme {
     pub fn anthropic() -> Self {
         Self {
             name: "anthropic",
-            primary: Color::Rgb(227, 137, 62),     // #E3893E - Anthropic orange
-            bright: Color::Rgb(255, 170, 80),       // Bright orange
-            dim: Color::Rgb(140, 85, 40),           // Dim orange
-            bg: Color::Rgb(20, 15, 10),             // Near-black warm
-            surface: Color::Rgb(35, 25, 18),        // Dark surface
-            text: Color::Rgb(230, 210, 190),        // Warm white
-            text_dim: Color::Rgb(120, 100, 80),     // Muted text
-            accent: Color::Rgb(255, 200, 100),      // Gold accent
+            primary: Color::Rgb(227, 137, 62), // #E3893E - Anthropic orange
+            bright: Color::Rgb(255, 170, 80),  // Bright orange
+            dim: Color::Rgb(140, 85, 40),      // Dim orange
+            bg: Color::Rgb(20, 15, 10),        // Near-black warm
+            surface: Color::Rgb(35, 25, 18),   // Dark surface
+            text: Color::Rgb(230, 210, 190),   // Warm white
+            text_dim: Color::Rgb(120, 100, 80), // Muted text
+            accent: Color::Rgb(255, 200, 100), // Gold accent
             spectrum_colors: vec![
-                Color::Rgb(140, 85, 40),            // Low - dim orange
-                Color::Rgb(180, 110, 50),           //
-                Color::Rgb(210, 130, 55),            //
-                Color::Rgb(227, 137, 62),           // Mid - primary orange
-                Color::Rgb(240, 155, 70),           //
-                Color::Rgb(255, 170, 80),           // High - bright orange
-                Color::Rgb(255, 190, 100),          //
-                Color::Rgb(255, 210, 130),          // Peak - golden
+                Color::Rgb(140, 85, 40),   // Low - dim orange
+                Color::Rgb(180, 110, 50),  //
+                Color::Rgb(210, 130, 55),  //
+                Color::Rgb(227, 137, 62),  // Mid - primary orange
+                Color::Rgb(240, 155, 70),  //
+                Color::Rgb(255, 170, 80),  // High - bright orange
+                Color::Rgb(255, 190, 100), //
+                Color::Rgb(255, 210, 130), // Peak - golden
             ],
         }
     }

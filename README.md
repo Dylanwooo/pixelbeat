@@ -51,9 +51,11 @@ cargo build --release
 # Add to PATH
 cp target/release/px ~/.local/bin/  # or anywhere on your PATH
 
-# Start the daemon and play a YouTube playlist
-px daemon &
+# Play a YouTube playlist (daemon starts automatically)
 px yt "https://www.youtube.com/watch?v=jfKfPfyJRdk"
+
+# Or start with built-in radio
+px radio lofi
 ```
 
 You should hear music within a few seconds. Run `px tui` to open the full-screen player, or `px status` to see the cassette deck in your terminal.
@@ -75,16 +77,16 @@ This installs the `px` binary to `~/.cargo/bin/`. Make sure that directory is in
 | Dependency | Required | Purpose | Install |
 |-----------|----------|---------|---------|
 | **Rust** (2021 edition) | Yes | Build toolchain | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| **mpv** | For YouTube | Audio streaming backend | `brew install mpv` |
-| **yt-dlp** | For YouTube | Playlist resolution and audio extraction | `brew install yt-dlp` |
+| **mpv** | For YouTube | Audio streaming backend | macOS: `brew install mpv` / Linux: `apt install mpv` |
+| **yt-dlp** | For YouTube | Playlist resolution and audio extraction | macOS: `brew install yt-dlp` / Linux: `pip install yt-dlp` |
 
-Local file playback and built-in radio work without mpv or yt-dlp.
+Local file playback and built-in radio work without mpv or yt-dlp. The daemon warns at startup if these optional dependencies are missing.
 
 ## Usage
 
 ### Start the daemon
 
-The daemon must be running before you can send any playback commands.
+The daemon starts automatically when you run any playback command (e.g., `px play`, `px radio`). You can also start it explicitly:
 
 ```bash
 # Start the daemon (blocks the terminal)
@@ -337,6 +339,39 @@ shuffle = false
 **Player engine** -- Local files are decoded by rodio (via symphonia). YouTube audio is streamed through an mpv subprocess controlled via mpv's JSON IPC protocol. The player transparently switches between rodio and mpv depending on the source.
 
 **Spectrum analyzer** -- Generates 32-bar beat-synced animation data at ~20 FPS. Uses deterministic pseudo-random waves with contrast boosting and spike injection for a punchy, reactive look. An FFT-based real PCM analysis path is implemented for future use.
+
+## Troubleshooting
+
+### No sound after starting
+
+- Check your system audio output: `px vol 0.8` to set volume.
+- Ensure no other process has exclusive access to the audio device.
+- Try restarting the daemon: `px quit && px daemon`.
+
+### Cannot connect to daemon
+
+- The daemon auto-starts with most commands. If it fails, start manually: `px daemon`.
+- Check if a stale socket exists: `rm ${XDG_RUNTIME_DIR:-/tmp}/pixelbeat.sock` and retry.
+- Check if the daemon is already running: `pgrep -f "px daemon"`.
+
+### YouTube not working
+
+- Ensure both **mpv** and **yt-dlp** are installed. The daemon warns at startup if they are missing.
+- Test directly: `yt-dlp --flat-playlist --dump-json <URL>` to verify yt-dlp works.
+- For age-restricted or YouTube Music content, set `youtube_cookies_browser` in your config:
+  ```toml
+  youtube_cookies_browser = "chrome"  # or "firefox", "brave", etc.
+  ```
+
+### Radio station silent or failing
+
+- Radio tracks are streamed over HTTP. Check your network connection.
+- Some tracks may be temporarily unavailable; pixelbeat retries up to 5 times per track automatically.
+- Check daemon output for errors: run `px daemon` in the foreground (without `&`).
+
+### Config file location
+
+pixelbeat reads from `~/.config/pixelbeat/config.toml`. A commented template is auto-generated on first run. If the file becomes corrupted, delete it and restart the daemon to regenerate defaults.
 
 ## Contributing
 

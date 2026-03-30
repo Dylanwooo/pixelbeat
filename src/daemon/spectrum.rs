@@ -117,7 +117,9 @@ impl SpectrumAnalyzer {
 
     /// Deterministic pseudo-random hash for spike injection (0.0..1.0)
     fn hash_spike(tick: u64, idx: usize) -> f32 {
-        let v = ((tick as f64 * 127.1 + idx as f64 * 311.7).sin() * 43758.5453).fract().abs();
+        let v = ((tick as f64 * 127.1 + idx as f64 * 311.7).sin() * 43758.5453)
+            .fract()
+            .abs();
         v as f32
     }
 
@@ -127,10 +129,7 @@ impl SpectrumAnalyzer {
         let fft_size = samples.len().next_power_of_two();
         let fft = self._planner.plan_fft_forward(fft_size);
 
-        let mut buffer: Vec<Complex<f32>> = samples
-            .iter()
-            .map(|&s| Complex::new(s, 0.0))
-            .collect();
+        let mut buffer: Vec<Complex<f32>> = samples.iter().map(|&s| Complex::new(s, 0.0)).collect();
         buffer.resize(fft_size, Complex::new(0.0, 0.0));
 
         // Apply Hanning window
@@ -150,10 +149,7 @@ impl SpectrumAnalyzer {
         for (i, bar) in result.iter_mut().enumerate() {
             let start = i * bins_per_bar;
             let end = start + bins_per_bar;
-            let sum: f32 = buffer[start..end]
-                .iter()
-                .map(|c| c.norm())
-                .sum();
+            let sum: f32 = buffer[start..end].iter().map(|c| c.norm()).sum();
             *bar = (sum / bins_per_bar as f32).log10().max(0.0) / 2.0;
         }
 

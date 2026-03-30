@@ -25,6 +25,9 @@ pub struct PlayerState {
     pub track_count: usize,
     pub shuffle: bool,
     pub repeat: bool,
+    /// Last error message, displayed in TUI and cleared after timeout
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
 }
 
 impl Default for PlayerState {
@@ -40,6 +43,7 @@ impl Default for PlayerState {
             track_count: 0,
             shuffle: false,
             repeat: false,
+            last_error: None,
         }
     }
 }
@@ -175,7 +179,7 @@ impl Player {
                 .map(|e| e.to_string_lossy().to_lowercase())
                 .unwrap_or_default();
             match ext.as_str() {
-                "mp3" => size / 16000.0, // ~128kbps average
+                "mp3" => size / 16000.0,  // ~128kbps average
                 "flac" => size / 88200.0, // ~706kbps average
                 "wav" => size / 176400.0, // 44.1kHz 16-bit stereo
                 "ogg" => size / 16000.0,
@@ -406,12 +410,13 @@ impl Player {
 
     /// Start radio mode: stream random tracks from an online station
     pub fn play_radio(&self, station_name: &str) -> Result<()> {
-        let station = radio::find_station(station_name)
-            .ok_or_else(|| anyhow::anyhow!(
+        let station = radio::find_station(station_name).ok_or_else(|| {
+            anyhow::anyhow!(
                 "Unknown station '{}'. Available: {}",
                 station_name,
                 radio::list_stations().join(", ")
-            ))?;
+            )
+        })?;
 
         *self.radio_station.lock().unwrap() = Some(station.clone());
         *self.yt_track_index.lock().unwrap() = 0;
@@ -529,8 +534,7 @@ impl Player {
             }
         };
 
-        let yt_track =
-            yt_track.ok_or_else(|| anyhow::anyhow!("No YouTube tracks available"))?;
+        let yt_track = yt_track.ok_or_else(|| anyhow::anyhow!("No YouTube tracks available"))?;
 
         let track_count = match &station.source {
             radio::RadioSource::YouTube { tracks, .. } => tracks.len(),
@@ -560,7 +564,10 @@ impl Player {
         *self.track_start.lock().unwrap() = Some(Instant::now());
         self.is_paused.store(false, Ordering::Relaxed);
 
-        eprintln!("pixelbeat: streaming: {} ({:.0}s)", yt_track.title, yt_track.duration);
+        eprintln!(
+            "pixelbeat: streaming: {} ({:.0}s)",
+            yt_track.title, yt_track.duration
+        );
         Ok(())
     }
 

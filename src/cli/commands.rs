@@ -1,7 +1,7 @@
 use anyhow::Result;
 
-use crate::daemon::ipc::{self, Command, Response};
 use crate::cli::format;
+use crate::daemon::ipc::{self, Command, Response};
 
 pub fn handle_play(path: Option<String>) -> Result<()> {
     let resp = ipc::send_command(&Command::Play { path })?;
@@ -60,7 +60,9 @@ pub fn handle_repeat(enabled: bool) -> Result<()> {
 pub fn handle_status(fmt: Option<String>) -> Result<()> {
     let resp = ipc::send_command(&Command::Status)?;
     if let Some(state) = &resp.state {
-        let fmt_str = fmt.as_deref().unwrap_or(format::default_statusline_format());
+        let fmt_str = fmt
+            .as_deref()
+            .unwrap_or(format::default_statusline_format());
         println!("{}", format::render_format(fmt_str, state));
     } else if !resp.ok {
         if let Some(err) = &resp.error {
@@ -114,7 +116,13 @@ fn print_response(resp: &Response) {
     } else if let Some(state) = &resp.state {
         let icon = if state.playing { "▶" } else { "⏸" };
         if !state.title.is_empty() {
-            eprintln!("{} {} [{}/{}]", icon, state.title, state.track_index + 1, state.track_count);
+            eprintln!(
+                "{} {} [{}/{}]",
+                icon,
+                state.title,
+                state.track_index + 1,
+                state.track_count
+            );
         }
     }
 }

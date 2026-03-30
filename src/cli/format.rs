@@ -1,11 +1,11 @@
 use crate::daemon::player::PlayerState;
 
 /// Anthropic orange palette
-const ORANGE_PRIMARY: &str = "\x1b[38;2;227;137;62m";    // #E3893E - Anthropic orange
-const ORANGE_BRIGHT: &str = "\x1b[38;2;255;170;80m";     // Brighter orange for highlights
-const ORANGE_DIM: &str = "\x1b[38;2;140;85;40m";         // Dim orange for inactive
-const ORANGE_BG: &str = "\x1b[38;2;60;35;15m";           // Very dim for background elements
-const WARM_WHITE: &str = "\x1b[38;2;200;180;160m";       // Warm white for box drawing
+const ORANGE_PRIMARY: &str = "\x1b[38;2;227;137;62m"; // #E3893E - Anthropic orange
+const ORANGE_BRIGHT: &str = "\x1b[38;2;255;170;80m"; // Brighter orange for highlights
+const ORANGE_DIM: &str = "\x1b[38;2;140;85;40m"; // Dim orange for inactive
+const ORANGE_BG: &str = "\x1b[38;2;60;35;15m"; // Very dim for background elements
+const WARM_WHITE: &str = "\x1b[38;2;200;180;160m"; // Warm white for box drawing
 const RESET: &str = "\x1b[0m";
 
 const SPECTRUM_BARS: &[char] = &['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
@@ -66,7 +66,9 @@ fn render_tape(progress: f64, width: usize) -> String {
 
     format!(
         "{}{}{} {}{}{}●{}{}{}{}{}",
-        ORANGE_DIM, left_reel, RESET,
+        ORANGE_DIM,
+        left_reel,
+        RESET,
         ORANGE_BG,
         "─".repeat(played),
         ORANGE_BRIGHT,
@@ -119,7 +121,11 @@ fn render_bar(progress: f64, width: usize) -> String {
 
 /// Render the play/pause icon
 fn render_icon(playing: bool) -> &'static str {
-    if playing { "▶" } else { "⏸" }
+    if playing {
+        "▶"
+    } else {
+        "⏸"
+    }
 }
 
 /// Render the full cassette deck status line (multi-line)
@@ -157,7 +163,9 @@ pub fn render_cassette(state: &PlayerState, width: usize) -> String {
     let line_top = format!(
         "{}┌ {}{}{}{}{}┐{}",
         ORANGE_DIM,
-        ORANGE_PRIMARY, label, ORANGE_DIM,
+        ORANGE_PRIMARY,
+        label,
+        ORANGE_DIM,
         " ─".repeat(border_after / 2),
         if border_after % 2 == 1 { "─" } else { "" },
         RESET,
@@ -167,33 +175,45 @@ pub fn render_cassette(state: &PlayerState, width: usize) -> String {
     let tape = render_tape(progress, inner_w.saturating_sub(14));
     let line_tape = format!(
         "{}│{} {} {}{} {}{}/{}{}{}│{}",
-        ORANGE_DIM, RESET,
+        ORANGE_DIM,
+        RESET,
         tape,
-        ORANGE_BRIGHT, icon, RESET,
+        ORANGE_BRIGHT,
+        icon,
+        RESET,
         format!("{}{}{}", ORANGE_DIM, elapsed, RESET),
         format!("{}{}{}", ORANGE_BG, duration, RESET),
         " ".repeat(0),
-        ORANGE_DIM, RESET,
+        ORANGE_DIM,
+        RESET,
     );
 
     // Line 3: Title + spectrum + modes
     let spectrum = render_spectrum(&state.spectrum, 12);
     let line_info = format!(
         "{}│{} {}{}{} {} {}{}│{}",
-        ORANGE_DIM, RESET,
-        ORANGE_BRIGHT, title, RESET,
-        spectrum,
-        modes,
-        ORANGE_DIM, RESET,
+        ORANGE_DIM, RESET, ORANGE_BRIGHT, title, RESET, spectrum, modes, ORANGE_DIM, RESET,
     );
 
     // Line 4: Clickable control buttons with OSC 8 hyperlinks
     let osc_link = |url: &str, icon: &str, color: &str| -> String {
         format!("{}\x1b]8;;{}\x07{}\x1b]8;;\x07{}", color, url, icon, RESET)
     };
-    let toggle_icon = if state.playing { "\u{23f8}" } else { "\u{25b6}" };
-    let repeat_color = if state.repeat { ORANGE_BRIGHT } else { ORANGE_DIM };
-    let shuffle_color = if state.shuffle { ORANGE_BRIGHT } else { ORANGE_DIM };
+    let toggle_icon = if state.playing {
+        "\u{23f8}"
+    } else {
+        "\u{25b6}"
+    };
+    let repeat_color = if state.repeat {
+        ORANGE_BRIGHT
+    } else {
+        ORANGE_DIM
+    };
+    let shuffle_color = if state.shuffle {
+        ORANGE_BRIGHT
+    } else {
+        ORANGE_DIM
+    };
     let btn_prev = osc_link("pixelbeat://prev", "\u{23ee}", ORANGE_PRIMARY);
     let btn_toggle = osc_link("pixelbeat://toggle", toggle_icon, ORANGE_BRIGHT);
     let btn_next = osc_link("pixelbeat://next", "\u{23ed}", ORANGE_PRIMARY);
@@ -201,20 +221,24 @@ pub fn render_cassette(state: &PlayerState, width: usize) -> String {
     let btn_shuffle = osc_link("pixelbeat://shuffle", "\u{1f500}", shuffle_color);
     let line_buttons = format!(
         "{}│{}  {}   {}   {}       {}  {}       {}│{}",
-        ORANGE_DIM, RESET,
-        btn_prev, btn_toggle, btn_next, btn_repeat, btn_shuffle,
-        ORANGE_DIM, RESET,
-    );
-
-    // Line 5: Bottom border
-    let line_bottom = format!(
-        "{}└{}┘{}",
         ORANGE_DIM,
-        "─".repeat(inner_w + 2),
+        RESET,
+        btn_prev,
+        btn_toggle,
+        btn_next,
+        btn_repeat,
+        btn_shuffle,
+        ORANGE_DIM,
         RESET,
     );
 
-    format!("{}\n{}\n{}\n{}\n{}", line_top, line_tape, line_info, line_buttons, line_bottom)
+    // Line 5: Bottom border
+    let line_bottom = format!("{}└{}┘{}", ORANGE_DIM, "─".repeat(inner_w + 2), RESET,);
+
+    format!(
+        "{}\n{}\n{}\n{}\n{}",
+        line_top, line_tape, line_info, line_buttons, line_bottom
+    )
 }
 
 /// Parse and render a format string with player state data
@@ -311,8 +335,16 @@ fn expand_token(token: &str, state: &PlayerState) -> String {
             }
         }
         "modes" => {
-            let repeat_color = if state.repeat { ORANGE_BRIGHT } else { ORANGE_BG };
-            let shuffle_color = if state.shuffle { ORANGE_BRIGHT } else { ORANGE_BG };
+            let repeat_color = if state.repeat {
+                ORANGE_BRIGHT
+            } else {
+                ORANGE_BG
+            };
+            let shuffle_color = if state.shuffle {
+                ORANGE_BRIGHT
+            } else {
+                ORANGE_BG
+            };
             format!("{}🔁{} {}🔀{}", repeat_color, RESET, shuffle_color, RESET)
         }
         "controls" => {
@@ -326,8 +358,16 @@ fn expand_token(token: &str, state: &PlayerState) -> String {
                 format!("{}\x1b]8;;{}\x07{}\x1b]8;;\x07{}", color, url, icon, RESET)
             };
             let toggle_icon = if state.playing { "⏸" } else { "▶" };
-            let repeat_color = if state.repeat { ORANGE_BRIGHT } else { ORANGE_DIM };
-            let shuffle_color = if state.shuffle { ORANGE_BRIGHT } else { ORANGE_DIM };
+            let repeat_color = if state.repeat {
+                ORANGE_BRIGHT
+            } else {
+                ORANGE_DIM
+            };
+            let shuffle_color = if state.shuffle {
+                ORANGE_BRIGHT
+            } else {
+                ORANGE_DIM
+            };
             format!(
                 "{}  {}  {}  {}  {}",
                 link("pixelbeat://prev", "⏮", ORANGE_PRIMARY),

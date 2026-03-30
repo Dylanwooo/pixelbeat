@@ -35,13 +35,25 @@ pub fn is_mpv_available() -> bool {
 /// Fetch all tracks from a YouTube playlist/video URL using yt-dlp
 pub fn fetch_playlist(url: &str) -> Result<Vec<YtTrack>> {
     if !is_ytdlp_available() {
-        anyhow::bail!("yt-dlp is not installed. Install with: brew install yt-dlp");
+        if cfg!(target_os = "macos") {
+            anyhow::bail!("yt-dlp is not installed. Install with: brew install yt-dlp");
+        } else {
+            anyhow::bail!(
+                "yt-dlp is not installed. Install with: pip install yt-dlp / apt install yt-dlp"
+            );
+        }
     }
 
     eprintln!("pixelbeat: fetching YouTube playlist info...");
 
     let output = Command::new("yt-dlp")
-        .args(["--flat-playlist", "--dump-json", "--no-warnings", "--quiet", url])
+        .args([
+            "--flat-playlist",
+            "--dump-json",
+            "--no-warnings",
+            "--quiet",
+            url,
+        ])
         .output()
         .context("Failed to run yt-dlp")?;
 
@@ -60,15 +72,30 @@ pub fn fetch_playlist(url: &str) -> Result<Vec<YtTrack>> {
         let entry: serde_json::Value =
             serde_json::from_str(line).with_context(|| "Failed to parse yt-dlp JSON")?;
 
-        let video_id = entry.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let video_id = entry
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if video_id.is_empty() {
             continue;
         }
 
-        let title = entry.get("title").and_then(|v| v.as_str()).unwrap_or("Unknown").to_string();
-        let duration = entry.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let title = entry
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown")
+            .to_string();
+        let duration = entry
+            .get("duration")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
 
-        tracks.push(YtTrack { video_id, title, duration });
+        tracks.push(YtTrack {
+            video_id,
+            title,
+            duration,
+        });
     }
 
     eprintln!("pixelbeat: found {} tracks in playlist", tracks.len());
@@ -84,13 +111,25 @@ pub struct MpvPlayer {
 
 impl MpvPlayer {
     pub fn new() -> Self {
-        Self { process: None, conn: None }
+        Self {
+            process: None,
+            conn: None,
+        }
     }
 
     /// Start streaming a YouTube URL via mpv (instant playback, no download)
-    pub fn play_url(&mut self, url: &str, volume: f32, cookies_browser: Option<&str>) -> Result<()> {
+    pub fn play_url(
+        &mut self,
+        url: &str,
+        volume: f32,
+        cookies_browser: Option<&str>,
+    ) -> Result<()> {
         if !is_mpv_available() {
-            anyhow::bail!("mpv is not installed. Install with: brew install mpv");
+            if cfg!(target_os = "macos") {
+                anyhow::bail!("mpv is not installed. Install with: brew install mpv");
+            } else {
+                anyhow::bail!("mpv is not installed. Install with: apt install mpv / pacman -S mpv / dnf install mpv");
+            }
         }
 
         self.stop();
@@ -108,7 +147,10 @@ impl MpvPlayer {
         ];
 
         if let Some(browser) = cookies_browser {
-            args.push(format!("--ytdl-raw-options=cookies-from-browser={}", browser));
+            args.push(format!(
+                "--ytdl-raw-options=cookies-from-browser={}",
+                browser
+            ));
         }
 
         args.push(url.to_string());
@@ -128,7 +170,8 @@ impl MpvPlayer {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(MPV_SOCKET, std::fs::Permissions::from_mode(0o700)).ok();
+                    std::fs::set_permissions(MPV_SOCKET, std::fs::Permissions::from_mode(0o700))
+                        .ok();
                 }
                 self.connect();
                 return Ok(());
@@ -142,8 +185,12 @@ impl MpvPlayer {
     /// Establish persistent IPC connection to mpv
     fn connect(&mut self) {
         if let Ok(stream) = UnixStream::connect(MPV_SOCKET) {
-            stream.set_read_timeout(Some(std::time::Duration::from_secs(1))).ok();
-            stream.set_write_timeout(Some(std::time::Duration::from_secs(1))).ok();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+                .ok();
+            stream
+                .set_write_timeout(Some(std::time::Duration::from_secs(1)))
+                .ok();
             self.conn = Some(stream);
         }
     }
@@ -158,22 +205,32 @@ impl MpvPlayer {
             let conn = match self.conn.as_ref() {
                 Some(s) => s,
                 None => {
-                    if attempt == 0 { continue; }
+                    if attempt == 0 {
+                        continue;
+                    }
                     anyhow::bail!("No mpv IPC connection");
                 }
             };
 
             let read_stream = match conn.try_clone() {
                 Ok(s) => s,
-                Err(_) => { self.conn = None; continue; }
+                Err(_) => {
+                    self.conn = None;
+                    continue;
+                }
             };
 
             let mut cmd_str = serde_json::to_string(cmd)?;
             cmd_str.push('\n');
 
-            if let Err(_) = conn.try_clone().and_then(|mut s| s.write_all(cmd_str.as_bytes())) {
+            if let Err(_) = conn
+                .try_clone()
+                .and_then(|mut s| s.write_all(cmd_str.as_bytes()))
+            {
                 self.conn = None;
-                if attempt == 0 { continue; }
+                if attempt == 0 {
+                    continue;
+                }
                 anyhow::bail!("Failed to write to mpv IPC");
             }
 
@@ -187,12 +244,18 @@ impl MpvPlayer {
                             }
                         }
                     }
-                    Err(_) => { self.conn = None; break; }
+                    Err(_) => {
+                        self.conn = None;
+                        break;
+                    }
                     _ => continue,
                 }
             }
 
-            if attempt == 0 { self.conn = None; continue; }
+            if attempt == 0 {
+                self.conn = None;
+                continue;
+            }
         }
 
         anyhow::bail!("No response from mpv")
@@ -200,7 +263,9 @@ impl MpvPlayer {
 
     pub fn get_property(&mut self, prop: &str) -> Option<serde_json::Value> {
         let cmd = serde_json::json!({"command": ["get_property", prop]});
-        self.send_command(&cmd).ok().and_then(|r| r.get("data").cloned())
+        self.send_command(&cmd)
+            .ok()
+            .and_then(|r| r.get("data").cloned())
     }
 
     pub fn set_property(&mut self, prop: &str, value: serde_json::Value) -> Result<()> {
@@ -218,7 +283,10 @@ impl MpvPlayer {
     }
 
     pub fn toggle_pause(&mut self) -> Result<()> {
-        let paused = self.get_property("pause").and_then(|v| v.as_bool()).unwrap_or(false);
+        let paused = self
+            .get_property("pause")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         self.set_property("pause", serde_json::json!(!paused))
     }
 
@@ -227,21 +295,31 @@ impl MpvPlayer {
     }
 
     pub fn get_position(&mut self) -> f64 {
-        self.get_property("time-pos").and_then(|v| v.as_f64()).unwrap_or(0.0)
+        self.get_property("time-pos")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
     }
 
     pub fn get_duration(&mut self) -> f64 {
-        self.get_property("duration").and_then(|v| v.as_f64()).unwrap_or(0.0)
+        self.get_property("duration")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
     }
 
     pub fn get_title(&mut self) -> String {
-        self.get_property("media-title").and_then(|v| v.as_str().map(|s| s.to_string())).unwrap_or_default()
+        self.get_property("media-title")
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .unwrap_or_default()
     }
 
     pub fn is_running(&mut self) -> bool {
         if let Some(ref mut child) = self.process {
             match child.try_wait() {
-                Ok(Some(_)) => { self.process = None; self.conn = None; false }
+                Ok(Some(_)) => {
+                    self.process = None;
+                    self.conn = None;
+                    false
+                }
                 Ok(None) => true,
                 Err(_) => false,
             }
@@ -251,11 +329,15 @@ impl MpvPlayer {
     }
 
     pub fn is_eof(&mut self) -> bool {
-        self.get_property("eof-reached").and_then(|v| v.as_bool()).unwrap_or(false)
+        self.get_property("eof-reached")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
     }
 
     pub fn is_paused(&mut self) -> bool {
-        self.get_property("pause").and_then(|v| v.as_bool()).unwrap_or(false)
+        self.get_property("pause")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
     }
 
     pub fn stop(&mut self) {

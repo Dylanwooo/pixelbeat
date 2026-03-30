@@ -46,10 +46,9 @@ pub fn builtin_stations() -> Vec<RadioStation> {
 
 pub fn find_station(name: &str) -> Option<RadioStation> {
     let name = name.to_lowercase();
-    builtin_stations().into_iter().find(|s| {
-        s.name == name
-            || s.name.contains(&name)
-    })
+    builtin_stations()
+        .into_iter()
+        .find(|s| s.name == name || s.name.contains(&name))
 }
 
 pub fn list_stations() -> Vec<String> {
